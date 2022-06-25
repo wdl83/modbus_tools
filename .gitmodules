@@ -1,0 +1,3 @@
+[submodule "ensure"]
+	path = ensure
+	url = https://github.com/wdl83/ensure

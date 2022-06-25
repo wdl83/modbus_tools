@@ -1,0 +1,33 @@
+CC=gcc
+
+ifndef OBJ_DIR
+$(error please define OBJ_DIR)
+endif
+
+ifndef DST_DIR
+$(error please define DST_DIR)
+endif
+
+CXXFLAGS = \
+	-DENABLE_TRACE \
+	-Os \
+	-Wall \
+	-Wextra \
+	-Wno-parentheses \
+	-Wshadow \
+	-Wunreachable-code \
+	-g \
+	-std=c++14
+
+ifndef RELEASE
+	CXXFLAGS +=  \
+		-fsanitize=address
+endif
+
+LDFLAGS = \
+	-lstdc++
+
+ifndef RELEASE
+	LDFLAGS += \
+		-fsanitize=address
+endif
