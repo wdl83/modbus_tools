@@ -4,6 +4,7 @@
 #include <thread>
 
 #include "Master.h"
+#include "Except.h"
 #include "crc.h"
 
 namespace Modbus {

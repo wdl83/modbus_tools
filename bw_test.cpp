@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "Ensure.h"
+#include "Except.h"
 #include "Master.h"
 #include "json.h"
 
