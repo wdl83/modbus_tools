@@ -1,0 +1,14 @@
+[
+  {
+    "slave" : 128,
+    "fcode" : 65,
+    "addr" : 4642,
+    "count" : 249
+  },
+  {
+    "slave" : 128,
+    "fcode" : 65,
+    "addr" : 4891,
+    "count" : 7
+  }
+]

@@ -29,9 +29,14 @@ Every utility which accepts json input expects array of requests:
 
 ```json
 [
-    {req1}, ..., {reqN}
+    {req1},
+    ...,
+    {reqN}
 ]
 ```
+
+Every request must contain **slave** and **fcode**, the rest of parameters depend
+on **function code**.
 
 If request **function code** reads data from Modbus RTU device:
 
@@ -49,6 +54,7 @@ If request **function code** reads data from Modbus RTU device:
 If request **function code** writes data to Modbus RTU device:
 
 ```json
+[
   {
     "slave" : INTEGER,
     "fcode" : INTEGER,
@@ -64,6 +70,8 @@ If request **function code** writes data to Modbus RTU device:
 1. **addr**: device memory address
 1. **count**: number of units of data to be read/written
 1. **value**: array of data to be written
+
+[Example json requests](https://github.com/wdl83/modbus_tools/tree/master/json)
 
 Supported Modbus RTU commands
 -----------------------------

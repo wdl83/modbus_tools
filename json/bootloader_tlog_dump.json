@@ -1,0 +1,23 @@
+[
+  {
+    "slave" : 128,
+    "fcode" : 3,
+    "addr" : 8325,
+    "count" : 125,
+    "timeout_ms" : 250
+  },
+  {
+    "slave" : 128,
+    "fcode" : 3,
+    "addr" : 8450,
+    "count" : 125,
+    "timeout_ms" : 250
+  },
+  {
+    "slave" : 128,
+    "fcode" : 3,
+    "addr" : 8575,
+    "count" : 5,
+    "timeout_ms" : 250
+  }
+]
