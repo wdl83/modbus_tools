@@ -113,3 +113,19 @@ Utility to monitor data on serial port. By default all data is dumped in HEX and
 ASCII, if -t option is provided only ASCII will be emited. Currently baud rate,
 parity, data bits and stop bits are fixed in source code.
 
+chslv
+-----
+Utility which recursively traverses json input file and tries to locate every
+**slave** key and set it to value given as input (-s option).
+Usefull when same request needs to be send to different slaves on Modbus network.
+
+probe
+-----
+Utility which tries to detect devices on Modbus network by sending
+RD_HOLDING_REGISTERS (3) and listening to reply. In theory if device is not able
+to execute request it should reply with exception. 
+
+bw_test
+-------
+Utility for stress testing the Modbus RTU device by sending request provided as
+input to device and validating reply. Stats are printed continuously to stdout.
