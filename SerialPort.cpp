@@ -149,6 +149,11 @@ SerialPort::SerialPort(
 
 SerialPort::~SerialPort()
 {
+    TRACE(
+        TraceLevel::Info,
+        "rxCntr ", rxCntr_, ", txCntr ", txCntr_,
+        ", rxTotalCntr ", rxTotalCntr_, ", txTotalCntr ", txTotalCntr_);
+
     if(-1 != fd_ && settings_)
     {
         (void)::tcflush(fd_, TCIOFLUSH);
