@@ -258,6 +258,23 @@ void SerialPort::drain()
     ENSURE(-1 != ::tcdrain(fd_), CRuntimeError);
 }
 
+void SerialPort::flush()
+{
+    ENSURE(-1 != fd_, RuntimeError);
+    ENSURE(-1 != ::tcflush(fd_, TCIOFLUSH), CRuntimeError);
+}
+
+void SerialPort::rxFlush()
+{
+    ENSURE(-1 != fd_, RuntimeError);
+    ENSURE(-1 != ::tcflush(fd_, TCIFLUSH), CRuntimeError);
+}
+
+void SerialPort::txFlush()
+{
+    ENSURE(-1 != fd_, RuntimeError);
+    ENSURE(-1 != ::tcflush(fd_, TCOFLUSH), CRuntimeError);
+}
 
 SerialPort::BaudRate toBaudRate(const std::string &rate)
 {

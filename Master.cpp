@@ -209,6 +209,25 @@ void Master::drainDevice()
     }
 }
 
+void Master::flushDevice()
+{
+    initDevice();
+    try
+    {
+        dev_->flush();
+    }
+    catch(CRuntimeError &except)
+    {
+        dev_.reset();
+        throw;
+    }
+    catch(RuntimeError &exept)
+    {
+        dev_.reset();
+        throw;
+    }
+}
+
 uint8_t *Master::readDevice(uint8_t *begin, const uint8_t *const end, mSecs timeout)
 {
     initDevice();
@@ -265,6 +284,8 @@ void Master::wrCoil(
     bool data,
     mSecs timeout)
 {
+    flushDevice();
+
     ByteSeq req
     {
         slaveAddr.value,
@@ -321,6 +342,8 @@ void Master::wrRegister(
     uint16_t data,
     mSecs timeout)
 {
+    flushDevice();
+
     ByteSeq req
     {
         slaveAddr.value,
@@ -376,6 +399,8 @@ void Master::wrRegisters(
     if(dataSeq.empty()) return;
 
     ENSURE(0x7C > dataSeq.size(), RuntimeError);
+
+    flushDevice();
 
     ByteSeq req
     {
@@ -434,6 +459,8 @@ DataSeq Master::rdCoils(
 {
     ENSURE(0 < count, RuntimeError);
     ENSURE(0x7D1 > count, RuntimeError);
+
+    flushDevice();
 
     ByteSeq req
     {
@@ -494,6 +521,8 @@ DataSeq Master::rdRegisters(
 {
     ENSURE(0 < count, RuntimeError);
     ENSURE(0x7E > count, RuntimeError);
+
+    flushDevice();
 
     ByteSeq req
     {
@@ -557,6 +586,8 @@ void Master::wrBytes(
 
     ENSURE(250u > byteSeq.size(), RuntimeError);
 
+    flushDevice();
+
     ByteSeq req
     {
         slaveAddr.value,
@@ -611,6 +642,8 @@ ByteSeq Master::rdBytes(
 {
     ENSURE(0 < count, RuntimeError);
     ENSURE(250 > count, RuntimeError);
+
+    flushDevice();
 
     ByteSeq req
     {

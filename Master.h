@@ -63,6 +63,7 @@ private:
 
     void initDevice();
     void drainDevice();
+    void flushDevice();
     uint8_t *readDevice(uint8_t *begin, const uint8_t *const end, mSecs timeout);
     const uint8_t *writeDevice(const uint8_t *begin, const uint8_t *const end, mSecs timeout);
     void updateTiming();

@@ -46,6 +46,9 @@ public:
     const uint8_t *write(const uint8_t *begin, const uint8_t *const end, mSecs timeout);
     /* wait until data written is transmitted */
     void drain();
+    void flush();
+    void rxFlush();
+    void txFlush();
 
     uint64_t rxCntr() const {return rxCntr_;}
     uint64_t txCntr() const {return txCntr_;}
