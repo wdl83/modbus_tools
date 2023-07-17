@@ -27,11 +27,9 @@ void dump(std::ostream &os, const uint8_t *begin, const uint8_t *const end)
 
     while(begin != end)
     {
-        os
-            << '['
-            << std::hex << std::setw(2) << std::setfill('0') << int(*begin)
-            << ']';
+        os << std::hex << std::setw(2) << std::setfill('0') << int(*begin);
         ++begin;
+        if(begin != end) os << '|';
     }
     os.flags(flags);
 }
@@ -45,10 +43,10 @@ void debug(
 
     const auto timeout = curr != end;
 
+    std::cout << tag << '(' << curr - begin << ") ";
+    if(timeout) std::cout << "TIMEOUT ";
     dump(std::cout, begin, end);
-    std::cout << " " << tag;
-    if(timeout) std::cout << " TIMEOUT, length " << curr - begin;
-    std::cout << std::endl;
+    std::cout << '\n';
 }
 
 } /* namespace */
