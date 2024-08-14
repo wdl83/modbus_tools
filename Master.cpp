@@ -1,4 +1,5 @@
 #include <chrono>
+#include <exception>
 #include <iomanip>
 #include <iostream>
 #include <thread>
@@ -23,8 +24,6 @@ constexpr const uint8_t FCODE_USER1_OFFSET = 65;
 constexpr const uint8_t FCODE_RD_BYTES = FCODE_USER1_OFFSET + 0;
 constexpr const uint8_t FCODE_WR_BYTES = FCODE_USER1_OFFSET + 1;
 
-const auto gDebug = ::getenv("DEBUG") ? bool(::atoi(getenv("DEBUG"))) : false;
-
 uint8_t lowByte(uint16_t word) { return word & 0xFF; }
 uint8_t highByte(uint16_t word) { return word >> 8; }
 
@@ -36,11 +35,28 @@ void dump(std::ostream &os, uint8_t data)
 void dump(std::ostream &os, const uint8_t *begin, const uint8_t *const end)
 {
     const auto flags = os.flags();
+    auto num = 0;
 
     while(begin != end)
     {
-        dump(os, *begin);
+        const int value = *begin;
         ++begin;
+
+        if(0 == value)
+        {
+            ++num;
+            if(begin != end) continue;
+        }
+
+        if(0 < num)
+        {
+            if(1 < num) os << std::dec << num << 'x';
+            dump(os, UINT8_C(0));
+            if(begin != end) os << ' ';
+            num = 0;
+        }
+
+        if(0 != value) dump(os, value);
         if(begin != end) os << ' ';
     }
     os.flags(flags);
@@ -51,52 +67,45 @@ enum class DataSource
     Master, Slave
 };
 
-std::string dump(
+void dump(
+    std::ostream &debugTo,
     DataSource dataSource,
     const char *tag,
     int line,
     const uint8_t *begin, const uint8_t *const end,
     const uint8_t *const curr)
 {
-    std::ostringstream oss;
+    if(curr == end) return;
 
-    if(DataSource::Master == dataSource) oss << ">";
-    else if(DataSource::Slave == dataSource) oss << "<";
+    debugTo << tag << ':' << line;
 
-    if(curr != end)
+    if(DataSource::Master == dataSource) debugTo << " > ";
+    else if(DataSource::Slave == dataSource) debugTo << " < ";
+
+    dump(debugTo, begin, end);
+
+    if(begin == curr) debugTo << " timeout\n";
+    else if(
+        std::distance(begin, curr) == 4 /* addr + fcode + crc */
+        && 0x80 < *std::next(begin))
     {
-        if(begin == curr) oss << " timeout\n";
-        else if(
-            std::distance(begin, curr) == 4 /* addr + fcode + crc */
-            && 0x80 < *std::next(begin))
-        {
-            oss
-                << " exception fcode " << int(*std::next(begin)) << "\n";
-        }
-        else if(
-            std::distance(begin, curr) == 5 /* addr + fcode + ecode + crc */
-            && 0x80 < *std::next(begin))
-        {
-            oss
-                << " exception fcode " << int(*std::next(begin))
-                << " ecode " << int(*std::next(begin, 2)) << "\n";
-        }
-        else
-        {
-            oss
-                << " unsupported (partial reply?)"
-                << ", length " << curr - begin
-                << ", expected " << end - begin << "\n";
-        }
+        debugTo << " exception fcode " << int(*std::next(begin)) << "\n";
     }
-    dump(oss, begin, end);
-    if(gDebug) oss << ", " << line << ":" << tag;
-    oss << '\n';
-
-    auto str = oss.str();
-
-    if(gDebug) std::cout << str;
-    return str;
+    else if(
+        std::distance(begin, curr) == 5 /* addr + fcode + ecode + crc */
+        && 0x80 < *std::next(begin))
+    {
+        debugTo
+            << " exception fcode " << int(*std::next(begin))
+            << " ecode " << int(*std::next(begin, 2)) << "\n";
+    }
+    else
+    {
+        debugTo
+            << " unsupported (partial reply?)"
+            << ", length " << curr - begin
+            << ", expected " << end - begin << "\n";
+    }
 }
 
 ByteSeq &append(ByteSeq &seq, uint16_t word)
@@ -151,7 +160,7 @@ ByteSeq &appendCRC(ByteSeq &seq)
     return seq;
 }
 
-void validateCRC(const ByteSeq &seq)
+void validateCRC(std::ostream &debugTo, const ByteSeq &seq)
 {
     if(seq.empty()) return;
 
@@ -162,30 +171,50 @@ void validateCRC(const ByteSeq &seq)
     const auto begin = seq.data();
     auto calcValue = calcCRC(begin, std::next(begin, seq.size() - 2));
 
-    if(gDebug)
-    {
-        const auto flags = std::cout.flags();
-        std::cout << "rCRC ";
-        dump(std::cout, recvValue.highByte());
-        dump(std::cout, recvValue.lowByte());
-        std::cout << " cCRC ";
-        dump(std::cout, calcValue.highByte());
-        dump(std::cout, calcValue.lowByte());
-        std::cout << "\n";
-        std::cout.flags(flags);
-    }
+    const auto flags = debugTo.flags();
+    debugTo << "rCRC ";
+    dump(debugTo, recvValue.highByte());
+    dump(debugTo, recvValue.lowByte());
+    debugTo << " cCRC ";
+    dump(debugTo, calcValue.highByte());
+    dump(debugTo, calcValue.lowByte());
+    debugTo << "\n";
+    debugTo.flags(flags);
 
     ENSURE(recvValue.value == calcValue.value, CRCError);
 }
 
 } /* namespace */
 
+Master::DebugScope::~DebugScope()
+{
+    trace(
+        std::uncaught_exception()
+        ? TraceLevel::Error
+        : TraceLevel::Debug,
+        master_.debugTo_);
+}
+
+Master::Master(
+    std::string devName,
+    BaudRate baudRate,
+    Parity parity,
+    DataBits dataBits,
+    StopBits stopBits):
+    devName_{std::move(devName)},
+    baudRate_{baudRate},
+    parity_{parity},
+    dataBits_{dataBits},
+    stopBits_{stopBits}
+{
+}
+
 void Master::initDevice()
 {
     if(dev_) return;
 
     dev_ =
-        std::make_unique<SerialPort>(devName_, baudRate_, parity_, dataBits_, stopBits_);
+        std::make_unique<SerialPort>(devName_, baudRate_, parity_, dataBits_, stopBits_, &debugTo_);
     ENSURE(dev_, RuntimeError);
     updateTiming();
 }
@@ -284,6 +313,7 @@ void Master::wrCoil(
     bool data,
     mSecs timeout)
 {
+    DebugScope debuScope{*this};
     flushDevice();
 
     ByteSeq req
@@ -304,8 +334,8 @@ void Master::wrCoil(
         const auto reqEnd = reqBegin + req.size();
         const auto r = writeDevice(reqBegin, reqEnd, mSecs{0});
 
-        const auto debug = dump(DataSource::Master, __FUNCTION__, __LINE__, reqBegin, reqEnd, r);
-        vENSURE(reqEnd == r, RequestError, debug);
+        dump(debugTo_, DataSource::Master, __FUNCTION__, __LINE__, reqBegin, reqEnd, r);
+        ENSURE(reqEnd == r, RequestError);
     }
 
     drainDevice();
@@ -324,11 +354,11 @@ void Master::wrCoil(
         const auto repEnd = repBegin + rep.size();
         const auto r = readDevice(repBegin, repEnd, timeout);
 
-        const auto debug = dump(DataSource::Slave, __FUNCTION__, __LINE__, repBegin, repEnd, r);
-        vENSURE(repBegin != r, TimeoutError, debug);
+        dump(debugTo_, DataSource::Slave, __FUNCTION__, __LINE__, repBegin, repEnd, r);
+        ENSURE(repBegin != r, TimeoutError);
     }
 
-    validateCRC(rep);
+    validateCRC(debugTo_, rep);
     ENSURE(
         std::equal(
             std::begin(rep), std::next(std::begin(rep), rep.size() - sizeof(CRC)),
@@ -342,6 +372,7 @@ void Master::wrRegister(
     uint16_t data,
     mSecs timeout)
 {
+    DebugScope debuScope{*this};
     flushDevice();
 
     ByteSeq req
@@ -364,8 +395,8 @@ void Master::wrRegister(
         const auto reqEnd = reqBegin + req.size();
         const auto r = writeDevice(reqBegin, reqEnd, mSecs{0});
 
-        const auto debug = dump(DataSource::Master, __FUNCTION__, __LINE__, reqBegin, reqEnd, r);
-        vENSURE(reqEnd == r, RequestError, debug);
+        dump(debugTo_, DataSource::Master, __FUNCTION__, __LINE__, reqBegin, reqEnd, r);
+        ENSURE(reqEnd == r, RequestError);
     }
 
     drainDevice();
@@ -378,11 +409,11 @@ void Master::wrRegister(
         const auto repEnd = repBegin + rep.size();
         const auto r = readDevice(repBegin, repEnd, timeout);
 
-        const auto debug = dump(DataSource::Slave, __FUNCTION__, __LINE__, repBegin, repEnd, r);
-        vENSURE(repBegin != r, TimeoutError, debug);
+        dump(debugTo_, DataSource::Slave, __FUNCTION__, __LINE__, repBegin, repEnd, r);
+        ENSURE(repBegin != r, TimeoutError);
     }
 
-    validateCRC(rep);
+    validateCRC(debugTo_, rep);
     ENSURE(
         std::equal(
             std::begin(rep), std::next(std::begin(rep), rep.size() - sizeof(CRC)),
@@ -396,6 +427,8 @@ void Master::wrRegisters(
     const DataSeq &dataSeq,
     mSecs timeout)
 {
+    DebugScope debuScope{*this};
+
     if(dataSeq.empty()) return;
 
     ENSURE(0x7C > dataSeq.size(), RuntimeError);
@@ -420,8 +453,8 @@ void Master::wrRegisters(
         const auto reqEnd = reqBegin + req.size();
         const auto r = writeDevice(reqBegin, reqEnd, mSecs{0});
 
-        const auto debug = dump(DataSource::Master, __FUNCTION__, __LINE__, reqBegin, reqEnd, r);
-        vENSURE(reqEnd == r, RequestError, debug);
+        dump(debugTo_, DataSource::Master, __FUNCTION__, __LINE__, reqBegin, reqEnd, r);
+        ENSURE(reqEnd == r, RequestError);
     }
 
     drainDevice();
@@ -439,11 +472,11 @@ void Master::wrRegisters(
         const auto repEnd = repBegin + rep.size();
         const auto r = readDevice(repBegin, repEnd, timeout);
 
-        const auto debug = dump(DataSource::Slave, __FUNCTION__, __LINE__, repBegin, repEnd, r);
-        vENSURE(repBegin != r, TimeoutError, debug);
+        dump(debugTo_, DataSource::Slave, __FUNCTION__, __LINE__, repBegin, repEnd, r);
+        ENSURE(repBegin != r, TimeoutError);
     }
 
-    validateCRC(rep);
+    validateCRC(debugTo_, rep);
     ENSURE(
         std::equal(
             std::begin(rep), std::next(std::begin(rep), rep.size() - sizeof(CRC)),
@@ -457,6 +490,8 @@ DataSeq Master::rdCoils(
     uint16_t count,
     mSecs timeout)
 {
+    DebugScope debuScope{*this};
+
     ENSURE(0 < count, RuntimeError);
     ENSURE(0x7D1 > count, RuntimeError);
 
@@ -480,8 +515,8 @@ DataSeq Master::rdCoils(
         const auto reqEnd = reqBegin + req.size();
         const auto r = writeDevice(reqBegin, reqEnd, mSecs{0});
 
-        const auto debug = dump(DataSource::Master, __FUNCTION__, __LINE__, reqBegin, reqEnd, r);
-        vENSURE(reqEnd == r, RequestError, debug);
+        dump(debugTo_, DataSource::Master, __FUNCTION__, __LINE__, reqBegin, reqEnd, r);
+        ENSURE(reqEnd == r, RequestError);
     }
 
     drainDevice();
@@ -497,11 +532,11 @@ DataSeq Master::rdCoils(
         const auto repEnd = repBegin + rep.size();
         const auto r = readDevice(repBegin, repEnd, timeout);
 
-        const auto debug = dump(DataSource::Slave, __FUNCTION__, __LINE__, repBegin, repEnd, r);
-        vENSURE(repBegin != r, TimeoutError, debug);
+        dump(debugTo_, DataSource::Slave, __FUNCTION__, __LINE__, repBegin, repEnd, r);
+        ENSURE(repBegin != r, TimeoutError);
     }
 
-    validateCRC(rep);
+    validateCRC(debugTo_, rep);
     ENSURE(rep[0] == slaveAddr.value, ReplyError);
     ENSURE(rep[1] == FCODE_RD_COILS, ReplyError);
 
@@ -519,6 +554,8 @@ DataSeq Master::rdRegisters(
     uint8_t count,
     mSecs timeout)
 {
+    DebugScope debuScope{*this};
+
     ENSURE(0 < count, RuntimeError);
     ENSURE(0x7E > count, RuntimeError);
 
@@ -542,8 +579,8 @@ DataSeq Master::rdRegisters(
         const auto reqEnd = reqBegin + req.size();
         const auto r = writeDevice(reqBegin, reqEnd, mSecs{0});
 
-        const auto debug = dump(DataSource::Master, __FUNCTION__, __LINE__, reqBegin, reqEnd, r);
-        vENSURE(reqEnd == r, RequestError, debug);
+        dump(debugTo_, DataSource::Master, __FUNCTION__, __LINE__, reqBegin, reqEnd, r);
+        ENSURE(reqEnd == r, RequestError);
     }
 
     drainDevice();
@@ -558,11 +595,11 @@ DataSeq Master::rdRegisters(
         const auto repEnd = repBegin + rep.size();
         const auto r = readDevice(repBegin, repEnd, timeout);
 
-        const auto debug = dump(DataSource::Slave, __FUNCTION__, __LINE__, repBegin, repEnd, r);
-        vENSURE(repBegin != r, TimeoutError, debug);
+        dump(debugTo_, DataSource::Slave, __FUNCTION__, __LINE__, repBegin, repEnd, r);
+        ENSURE(repBegin != r, TimeoutError);
     }
 
-    validateCRC(rep);
+    validateCRC(debugTo_, rep);
     ENSURE(rep[0] == slaveAddr.value, ReplyError);
     ENSURE(rep[1] == FCODE_RD_HOLDING_REGISTERS, ReplyError);
 
@@ -582,6 +619,8 @@ void Master::wrBytes(
     const ByteSeq &byteSeq,
     mSecs timeout)
 {
+    DebugScope debuScope{*this};
+
     if(byteSeq.empty()) return;
 
     ENSURE(250u > byteSeq.size(), RuntimeError);
@@ -608,8 +647,8 @@ void Master::wrBytes(
         const auto reqEnd = reqBegin + req.size();
         const auto r = writeDevice(reqBegin, reqEnd, mSecs{0});
 
-        const auto debug = dump(DataSource::Master, __FUNCTION__, __LINE__, reqBegin, reqEnd, r);
-        vENSURE(reqEnd == r, RequestError, debug);
+        dump(debugTo_, DataSource::Master, __FUNCTION__, __LINE__, reqBegin, reqEnd, r);
+        ENSURE(reqEnd == r, RequestError);
     }
 
     drainDevice();
@@ -622,11 +661,11 @@ void Master::wrBytes(
         const auto repEnd = repBegin + rep.size();
         const auto r = readDevice(repBegin, repEnd, timeout);
 
-        const auto debug = dump(DataSource::Slave, __FUNCTION__, __LINE__, repBegin, repEnd, r);
-        vENSURE(repBegin != r, TimeoutError, debug);
+        dump(debugTo_, DataSource::Slave, __FUNCTION__, __LINE__, repBegin, repEnd, r);
+        ENSURE(repBegin != r, TimeoutError);
     }
 
-    validateCRC(rep);
+    validateCRC(debugTo_, rep);
     ENSURE(
         std::equal(
             std::begin(rep), std::next(std::begin(rep), rep.size() - sizeof(CRC)),
@@ -640,6 +679,8 @@ ByteSeq Master::rdBytes(
     uint8_t count,
     mSecs timeout)
 {
+    DebugScope debuScope{*this};
+
     ENSURE(0 < count, RuntimeError);
     ENSURE(250 > count, RuntimeError);
 
@@ -664,8 +705,8 @@ ByteSeq Master::rdBytes(
         const auto reqEnd = reqBegin + req.size();
         const auto r = writeDevice(reqBegin, reqEnd, mSecs{0});
 
-        const auto debug = dump(DataSource::Master, __FUNCTION__, __LINE__, reqBegin, reqEnd, r);
-        vENSURE(reqEnd == r, RequestError, debug);
+        dump(debugTo_, DataSource::Master, __FUNCTION__, __LINE__, reqBegin, reqEnd, r);
+        ENSURE(reqEnd == r, RequestError);
     }
 
     drainDevice();
@@ -680,11 +721,11 @@ ByteSeq Master::rdBytes(
         const auto repEnd = repBegin + rep.size();
         const auto r = readDevice(repBegin, repEnd, timeout);
 
-        const auto debug = dump(DataSource::Slave, __FUNCTION__, __LINE__, repBegin, repEnd, r);
-        vENSURE(repBegin != r, TimeoutError, debug);
+        dump(debugTo_, DataSource::Slave, __FUNCTION__, __LINE__, repBegin, repEnd, r);
+        ENSURE(repBegin != r, TimeoutError);
     }
 
-    validateCRC(rep);
+    validateCRC(debugTo_, rep);
 
     ENSURE(
         std::equal(

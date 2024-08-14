@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <memory>
+#include <ostream>
 #include <string>
 
 #include <termios.h>
@@ -28,6 +29,7 @@ struct SerialPort
 
     using mSecs = std::chrono::milliseconds;
 private:
+    std::ostream *debugTo_;
     std::string devName_;
     BaudRate baudRate_;
     Parity parity_;
@@ -40,7 +42,13 @@ private:
     uint64_t rxTotalCntr_{0};
     uint64_t txTotalCntr_{0};
 public:
-    SerialPort(std::string devName, BaudRate, Parity, DataBits, StopBits);
+    SerialPort(
+        std::string devName,
+        BaudRate,
+        Parity,
+        DataBits,
+        StopBits,
+        std::ostream *);
     ~SerialPort();
     uint8_t *read(uint8_t *begin, const uint8_t *const end, mSecs timeout);
     const uint8_t *write(const uint8_t *begin, const uint8_t *const end, mSecs timeout);

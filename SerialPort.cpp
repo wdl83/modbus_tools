@@ -13,8 +13,6 @@
 
 namespace {
 
-const auto gDebug = nullptr != ::getenv("DEBUG_SERIAL");
-
 void validateSysCallResult(int r)
 {
     const auto valid = -1 != r || (-1 == r && EINTR == errno);
@@ -24,29 +22,47 @@ void validateSysCallResult(int r)
 void dump(std::ostream &os, const uint8_t *begin, const uint8_t *const end)
 {
     const auto flags = os.flags();
+    auto num = 0;
 
     while(begin != end)
     {
-        os << std::hex << std::setw(2) << std::setfill('0') << int(*begin);
+        const int value = *begin;
         ++begin;
-        if(begin != end) os << '|';
+
+        if(0 == value)
+        {
+            ++num;
+            if(begin != end) continue;
+        }
+
+        if(0 < num)
+        {
+            if(1 < num) os << std::dec << num << 'x';
+            os << std::hex << std::setw(2) << std::setfill('0') << 0;
+            if(begin != end) os << ' ';
+            num = 0;
+        }
+
+        if(0 != value) os << std::hex << std::setw(2) << std::setfill('0') << value;
+        if(begin != end) os << ' ';
     }
     os.flags(flags);
 }
 
 void debug(
+    std::ostream *dst,
     const char *tag,
     const uint8_t *begin, const uint8_t *const end,
     const uint8_t *const curr)
 {
-    if(!gDebug) return;
+    if(!dst) return;
 
     const auto timeout = curr != end;
 
-    std::cout << tag << '(' << curr - begin << ") ";
+    (*dst) << tag << '(' << curr - begin << ") ";
     if(timeout) std::cout << "TIMEOUT ";
-    dump(std::cout, begin, end);
-    std::cout << '\n';
+    dump(*dst, begin, end);
+    (*dst) << '\n';
 }
 
 } /* namespace */
@@ -58,7 +74,9 @@ SerialPort::SerialPort(
     BaudRate baudRate,
     Parity parity,
     DataBits dataBits,
-    StopBits stopBits):
+    StopBits stopBits,
+    std::ostream *debugTo):
+        debugTo_{debugTo},
         devName_{std::move(devName)},
         baudRate_{baudRate},
         parity_{parity},
@@ -201,7 +219,7 @@ uint8_t *SerialPort::read(uint8_t *begin, const uint8_t *const end, mSecs timeou
         }
     }
 
-    debug(__FUNCTION__, begin, end, curr);
+    debug(debugTo_, __FUNCTION__, begin, end, curr);
     return curr;
 }
 
@@ -246,7 +264,7 @@ const uint8_t *SerialPort::write(const uint8_t *begin, const uint8_t *const end,
         }
     }
 
-    debug(__FUNCTION__, begin, end, curr);
+    debug(debugTo_, __FUNCTION__, begin, end, curr);
     return curr;
 }
 

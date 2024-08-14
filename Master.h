@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <ostream>
+#include <sstream>
 #include <vector>
 
 #include "Ensure.h"
@@ -53,6 +54,15 @@ struct Master
     using DataSeq = std::vector<uint16_t>;
     using ByteSeq = std::vector<uint8_t>;
 private:
+    class DebugScope
+    {
+        Master &master_;
+    public:
+        DebugScope(Master &master): master_{master} {}
+        ~DebugScope();
+    };
+
+    std::ostringstream debugTo_;
     std::string devName_;
     BaudRate baudRate_;
     Parity parity_;
@@ -74,14 +84,7 @@ public:
         BaudRate baudRate = BaudRate::BR_19200,
         Parity parity = Parity::Even,
         DataBits dataBits = DataBits::Eight,
-        StopBits stopBits = StopBits::One):
-            devName_{std::move(devName)},
-            baudRate_{baudRate},
-            parity_{parity},
-            dataBits_{dataBits},
-            stopBits_{stopBits}
-    {}
-
+        StopBits stopBits = StopBits::One);
     SerialPort &device();
     void wrCoil(Addr slaveAddr, uint16_t memAddr, bool data, mSecs timeout);
     void wrRegister(Addr slaveAddr, uint16_t memAddr, uint16_t data, mSecs timeout);
