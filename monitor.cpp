@@ -70,13 +70,15 @@ void exec(const std::string &device, bool hex)
 
     while(!stop)
     {
+        std::ostringstream debugBuf;
         SerialPort serialPort
         {
             device,
             SerialPort::BaudRate::BR_19200,
             SerialPort::Parity::Even,
             SerialPort::DataBits::Eight,
-            SerialPort::StopBits::One
+            SerialPort::StopBits::One,
+            &debugBuf
         };
 
         try
@@ -102,15 +104,20 @@ void exec(const std::string &device, bool hex)
                     }
                 }
 
+                trace(TraceLevel::Debug, debugBuf);
+                debugBuf.str("");
+                debugBuf.clear();
             }
         }
         catch(const RuntimeError &except)
         {
             TRACE(TraceLevel::Error, except.what());
+            trace(TraceLevel::Error, debugBuf);
         }
         catch(...)
         {
             TRACE(TraceLevel::Error, "unsupported exception");
+            trace(TraceLevel::Error, debugBuf);
             stop = true;
         }
     }
