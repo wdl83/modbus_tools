@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <exception>
 #include <iomanip>
@@ -23,6 +24,10 @@ constexpr const uint8_t FCODE_WR_REGISTERS = 16;
 constexpr const uint8_t FCODE_USER1_OFFSET = 65;
 constexpr const uint8_t FCODE_RD_BYTES = FCODE_USER1_OFFSET + 0;
 constexpr const uint8_t FCODE_WR_BYTES = FCODE_USER1_OFFSET + 1;
+constexpr const uint8_t ECODE_ILLEGAL_FUNCTION = 0x81;
+constexpr const uint8_t ECODE_ILLEGAL_DATA_ADDRESS = 0x82;
+constexpr const uint8_t ECODE_ILLEGAL_DATA_VALUE = 0x83;
+constexpr const uint8_t ECODE_SERVER_DEVICE_FAILURE = 0x84;
 
 uint8_t lowByte(uint16_t word) { return word & 0xFF; }
 uint8_t highByte(uint16_t word) { return word >> 8; }
@@ -188,11 +193,23 @@ void validateCRC(std::ostream &debugTo, const ByteSeq &seq)
 
 Master::DebugScope::~DebugScope()
 {
-    trace(
-        std::uncaught_exception()
-        ? TraceLevel::Error
-        : TraceLevel::Debug,
-        master_.debugTo_);
+    const auto str = master_.debugTo_.str();
+    auto i = std::begin(str);
+    const auto end = std::end(str);
+
+    while(i != end)
+    {
+        auto j = std::find(i, end, '\n');
+
+        trace(
+            std::uncaught_exception()
+            ? TraceLevel::Error
+            : TraceLevel::Debug,
+            std::string{i, j});
+
+        if(end != j) ++j;
+        i = j;
+    }
 }
 
 Master::Master(

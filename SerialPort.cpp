@@ -57,11 +57,11 @@ void debug(
 {
     if(!dst) return;
 
-    const auto timeout = curr != end;
+    const auto timeout = curr == begin;
 
     (*dst) << tag << '(' << curr - begin << ") ";
-    if(timeout) std::cout << "TIMEOUT ";
     dump(*dst, begin, end);
+    if(timeout) (*dst) << " timeout";
     (*dst) << '\n';
 }
 
