@@ -1,12 +1,8 @@
-ifndef OBJ_DIR
-OBJ_DIR = ${PWD}/obj
+OBJ_DIR ?= ${PWD}/obj
 export OBJ_DIR
-endif
 
-ifndef DST_DIR
-DST_DIR = ${PWD}/dst
+DST_DIR ?= ${PWD}/dst
 export DST_DIR
-endif
 
 all: \
 	bw_test.Makefile \
