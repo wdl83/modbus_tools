@@ -52,14 +52,19 @@ void dump(std::ostream &os, const uint8_t *begin, const uint8_t *const end)
 void debug(
     std::ostream *dst,
     const char *tag,
+    std::chrono::steady_clock::time_point timestamp,
     const uint8_t *begin, const uint8_t *const end,
     const uint8_t *const curr)
 {
     if(!dst) return;
 
+    using namespace std::chrono;
+
+    const auto now = steady_clock::now();
+    const auto diff = duration_cast<microseconds>(now - timestamp);
     const auto timeout = curr == begin;
 
-    (*dst) << tag << '(' << curr - begin << ") ";
+    (*dst) << tag << " " << diff.count() << "us (" << curr - begin << ") ";
     dump(*dst, begin, end);
     if(timeout) (*dst) << " timeout";
     (*dst) << '\n';
@@ -181,6 +186,7 @@ SerialPort::~SerialPort()
 uint8_t *SerialPort::read(uint8_t *begin, const uint8_t *const end, mSecs timeout)
 {
     ENSURE(-1 != fd_, RuntimeError);
+    ENSURE(mSecs{0} <= timeout, RuntimeError);
 
     struct pollfd events =
     {
@@ -219,13 +225,14 @@ uint8_t *SerialPort::read(uint8_t *begin, const uint8_t *const end, mSecs timeou
         }
     }
 
-    debug(debugTo_, __FUNCTION__, begin, end, curr);
+    debug(debugTo_, __FUNCTION__, timestamp, begin, end, curr);
     return curr;
 }
 
 const uint8_t *SerialPort::write(const uint8_t *begin, const uint8_t *const end, mSecs timeout)
 {
     ENSURE(-1 != fd_, RuntimeError);
+    ENSURE(mSecs{0} <= timeout, RuntimeError);
 
     struct pollfd events =
     {
@@ -264,7 +271,7 @@ const uint8_t *SerialPort::write(const uint8_t *begin, const uint8_t *const end,
         }
     }
 
-    debug(debugTo_, __FUNCTION__, begin, end, curr);
+    debug(debugTo_, __FUNCTION__, timestamp, begin, end, curr);
     return curr;
 }
 
