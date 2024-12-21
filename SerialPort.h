@@ -27,7 +27,9 @@ struct SerialPort
     enum class DataBits {Five = 5, Six = 6, Seven = 7, Eight = 8};
     enum class StopBits {One = 1, Two = 2};
 
+    using uSecs = std::chrono::microseconds;
     using mSecs = std::chrono::milliseconds;
+    using Clock = std::chrono::steady_clock;
 private:
     std::ostream *debugTo_;
     std::string devName_;
@@ -37,6 +39,7 @@ private:
     StopBits stopBits_;
     int fd_{-1};
     std::unique_ptr<struct termios> settings_;
+    Clock::time_point lastTimestamp_;
     uint64_t rxCntr_{0};
     uint64_t txCntr_{0};
     uint64_t rxTotalCntr_{0};

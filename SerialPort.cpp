@@ -11,6 +11,8 @@
 #include "Ensure.h"
 #include "SerialPort.h"
 
+namespace Modbus {
+
 namespace {
 
 void validateSysCallResult(int r)
@@ -52,7 +54,8 @@ void dump(std::ostream &os, const uint8_t *begin, const uint8_t *const end)
 void debug(
     std::ostream *dst,
     const char *tag,
-    std::chrono::steady_clock::time_point timestamp,
+    SerialPort::Clock::duration lastOpDiff,
+    SerialPort::Clock::duration lastOpDuration,
     const uint8_t *begin, const uint8_t *const end,
     const uint8_t *const curr)
 {
@@ -60,19 +63,18 @@ void debug(
 
     using namespace std::chrono;
 
-    const auto now = steady_clock::now();
-    const auto diff = duration_cast<microseconds>(now - timestamp);
     const auto timeout = curr == begin;
 
-    (*dst) << tag << " " << diff.count() << "us (" << curr - begin << ") ";
+    (*dst) << tag << ' '
+        << duration_cast<milliseconds>(lastOpDiff).count() << "ms "
+        << duration_cast<microseconds>(lastOpDuration).count() << "us ("
+        << curr - begin << ") ";
     dump(*dst, begin, end);
     if(timeout) (*dst) << " timeout";
     (*dst) << '\n';
 }
 
 } /* namespace */
-
-namespace Modbus {
 
 SerialPort::SerialPort(
     std::string devName,
@@ -166,6 +168,7 @@ SerialPort::SerialPort(
     ENSURE(-1 != ::tcsetattr(fd_, TCSANOW, &settings), CRuntimeError);
     /* flush in/out buffers */
     ENSURE(-1 != ::tcflush(fd_, TCIOFLUSH), CRuntimeError);
+    lastTimestamp_  = Clock::now();
 }
 
 SerialPort::~SerialPort()
@@ -197,7 +200,8 @@ uint8_t *SerialPort::read(uint8_t *begin, const uint8_t *const end, mSecs timeou
 
     using namespace std::chrono;
 
-    const auto timestamp = steady_clock::now();
+    const auto startTimestamp = Clock::now();
+    const auto lastOpDiff = startTimestamp - lastTimestamp_;
     mSecs elapsed{0};
     auto curr = begin;
 
@@ -208,7 +212,7 @@ uint8_t *SerialPort::read(uint8_t *begin, const uint8_t *const end, mSecs timeou
 
             // ignore poll interrupted by received signal
             validateSysCallResult(r);
-            elapsed = duration_cast<mSecs>(steady_clock::now() - timestamp);
+            elapsed = duration_cast<mSecs>(Clock::now() - startTimestamp);
             /* fd is not ready for reading */
             if(0 == r) continue;
             if(0 == (events.revents & POLLIN)) continue;
@@ -225,7 +229,9 @@ uint8_t *SerialPort::read(uint8_t *begin, const uint8_t *const end, mSecs timeou
         }
     }
 
-    debug(debugTo_, __FUNCTION__, timestamp, begin, end, curr);
+    const auto now = Clock::now();
+    lastTimestamp_ = now;
+    debug(debugTo_, __FUNCTION__, lastOpDiff, now - startTimestamp, begin, end, curr);
     return curr;
 }
 
@@ -243,7 +249,8 @@ const uint8_t *SerialPort::write(const uint8_t *begin, const uint8_t *const end,
 
     using namespace std::chrono;
 
-    const auto timestamp = steady_clock::now();
+    const auto startTimestamp = Clock::now();
+    const auto lastOpDiff = startTimestamp - lastTimestamp_;
     mSecs elapsed{0};
     auto curr = begin;
 
@@ -254,7 +261,7 @@ const uint8_t *SerialPort::write(const uint8_t *begin, const uint8_t *const end,
 
             // ignore poll interrupted by received signal
             validateSysCallResult(r);
-            elapsed = duration_cast<mSecs>(steady_clock::now() - timestamp);
+            elapsed = duration_cast<mSecs>(Clock::now() - startTimestamp);
             /* fd is not ready for reading */
             if(0 == r) continue;
             if(0 == (events.revents & POLLOUT)) continue;
@@ -271,7 +278,9 @@ const uint8_t *SerialPort::write(const uint8_t *begin, const uint8_t *const end,
         }
     }
 
-    debug(debugTo_, __FUNCTION__, timestamp, begin, end, curr);
+    const auto now = Clock::now();
+    lastTimestamp_ = now;
+    debug(debugTo_, __FUNCTION__, lastOpDiff, now - startTimestamp, begin, end, curr);
     return curr;
 }
 

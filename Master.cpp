@@ -210,6 +210,8 @@ Master::DebugScope::~DebugScope()
         if(end != j) ++j;
         i = j;
     }
+
+    master_.debugTo_.str(std::string{});
 }
 
 Master::Master(
@@ -771,17 +773,14 @@ void Master::ensureTiming()
     const auto now = steady_clock::now();
 
     ENSURE(now > timestamp_, RuntimeError);
+    const auto elapsed = now - timestamp_;
 
-    const auto diff =
-        std::min(
-            interFrameTimeout(),
-            duration_cast<microseconds>(now - timestamp_));
+    if(elapsed >= interFrameTimeout()) return;
 
-    if(microseconds{0} < diff)
-    {
-        TRACE(TraceLevel::Debug, "waiting ", diff.count(), "us");
-        std::this_thread::sleep_for(diff);
-    }
+    const auto diff = interFrameTimeout() - duration_cast<microseconds>(elapsed);
+
+    TRACE(TraceLevel::Info, "waiting ", diff.count(), "us");
+    std::this_thread::sleep_for(diff);
 }
 
 } /* RTU */
