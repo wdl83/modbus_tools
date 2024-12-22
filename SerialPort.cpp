@@ -174,7 +174,7 @@ SerialPort::SerialPort(
 SerialPort::~SerialPort()
 {
     TRACE(
-        TraceLevel::Info,
+        TraceLevel::Debug,
         "rxCntr ", rxCntr_, ", txCntr ", txCntr_,
         ", rxTotalCntr ", rxTotalCntr_, ", txTotalCntr ", txTotalCntr_);
 

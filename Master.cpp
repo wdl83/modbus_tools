@@ -779,7 +779,7 @@ void Master::ensureTiming()
 
     const auto diff = interFrameTimeout() - duration_cast<microseconds>(elapsed);
 
-    TRACE(TraceLevel::Info, "waiting ", diff.count(), "us");
+    TRACE(TraceLevel::Trace, "waiting ", diff.count(), "us");
     std::this_thread::sleep_for(diff);
 }
 
