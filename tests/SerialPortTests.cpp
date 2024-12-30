@@ -41,8 +41,8 @@ UTEST(SerialPort, write_then_read)
     {
         uint8_t buf[255] = {};
         const auto i = pair.slave.read(std::begin(buf), std::cend(buf), timeout);
-        EXPECT_TRUE(i - std::cbegin(buf) == sizeof(message));
-        EXPECT_TRUE(0 == memcmp(message, buf, sizeof(message)));
+        EXPECT_TRUE(size_t(i - std::cbegin(buf)) == std::size(message));
+        EXPECT_TRUE(0 == memcmp(message, buf, std::size(message)));
     }
 }
 
@@ -63,8 +63,8 @@ UTEST(SerialPort, async_read_and_write)
             {
                 uint8_t buf[255] = {};
                 const auto i = pair.slave.read(std::begin(buf), std::cend(buf), timeout);
-                EXPECT_TRUE(i - std::cbegin(buf) == sizeof(message));
-                EXPECT_TRUE(0 == memcmp(message, buf, sizeof(message)));
+                EXPECT_TRUE(i - std::cbegin(buf) == std::size(message));
+                EXPECT_TRUE(0 == memcmp(message, buf, std::size(message)));
             });
 
     const auto i = pair.master.write(std::cbegin(message), std::cend(message), timeout);
@@ -98,7 +98,7 @@ UTEST(SerialPort, async_echo)
                     EXPECT_TRUE(pair.slave.write(std::cbegin(buf), i, milliseconds{dist(rgen)}) == i);
                     static_assert(std::size(buf) >= std::size(stopMessage));
                     // exit receiver thread if "STOP" message received
-                    if(0 == memcmp(stopMessage, buf, sizeof(stopMessage))) break;
+                    if(0 == memcmp(stopMessage, buf, std::size(stopMessage))) break;
                 }
             }};
 

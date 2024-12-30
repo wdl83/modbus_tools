@@ -4,6 +4,10 @@ export OBJ_DIR
 DST_DIR ?= ${PWD}/dst
 export DST_DIR
 
+.PHONY: all build test clean purge
+
+all: build test
+
 build: \
 	SerialPortTests.Makefile \
 	bw_test.Makefile \
@@ -28,7 +32,11 @@ install: build
 	make -f probe.Makefile install
 	make -f tlog_dump.Makefile install
 
+test: build
+	make -f SerialPortTests.Makefile run
+
 clean:
+	-make -f SerialPortTests.Makefile clean
 	-make -f bw_test.Makefile clean
 	-make -f master_cli.Makefile clean
 	-make -f monitor.Makefile clean

@@ -19,3 +19,6 @@ clean:
 install: $(DST_TARGET)
 	mkdir -p $(DST_DIR)/bin
 	cp $< $(DST_DIR)/bin
+
+run: $(DST_TARGET)
+	$(DST_TARGET)
