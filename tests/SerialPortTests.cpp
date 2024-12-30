@@ -11,7 +11,7 @@
 #include <thread>
 
 #include "utest.h"
-#include "SerialPort.h"
+#include "PseudoSerial.h"
 
 
 UTEST(SerialPort, open_and_close)

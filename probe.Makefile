@@ -2,6 +2,8 @@ include Makefile.defs
 
 TARGET = probe
 
+CXXFLAGS += -I ensure
+
 CXXSRCS = \
 	FdGuard.cpp \
 	Master.cpp \

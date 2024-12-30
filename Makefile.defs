@@ -10,7 +10,6 @@ endif
 
 CXXFLAGS = \
 	-DENABLE_TRACE \
-	-I ensure \
 	-O2 \
 	-Wall \
 	-Wextra \

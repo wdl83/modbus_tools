@@ -2,6 +2,8 @@ include Makefile.defs
 
 TARGET = master_cli
 
+CXXFLAGS += -I ensure
+
 CXXSRCS = \
 	FdGuard.cpp \
 	Master.cpp \

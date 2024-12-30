@@ -5,20 +5,20 @@ DST_DIR ?= ${PWD}/dst
 export DST_DIR
 
 build: \
+	SerialPortTests.Makefile \
 	bw_test.Makefile \
 	chslv.Makefile \
 	master_cli.Makefile \
 	monitor.Makefile \
 	probe.Makefile \
-	tests/Makefile \
 	tlog_dump.Makefile
+	make -f SerialPortTests.Makefile
 	make -f bw_test.Makefile
 	make -f chslv.Makefile
 	make -f master_cli.Makefile
 	make -f monitor.Makefile
 	make -f probe.Makefile
 	make -f tlog_dump.Makefile
-	make -C tests
 
 install: build
 	make -f bw_test.Makefile install
