@@ -1,17 +1,16 @@
-#include <fcntl.h>
-#include <poll.h>
-#include <termios.h>
-#include <unistd.h>
-
+#include <cassert>
 #include <cstring>
-
 #include <iomanip>
 #include <iostream>
+
+#include <fcntl.h>
+#include <limits.h>
+#include <poll.h>
+#include <unistd.h>
 
 #include "Ensure.h"
 #include "SerialPort.h"
 
-namespace Modbus {
 
 namespace {
 
@@ -77,41 +76,70 @@ void debug(
 } /* namespace */
 
 SerialPort::SerialPort(
-    std::string devName,
-    BaudRate baudRate,
-    Parity parity,
-    DataBits dataBits,
-    StopBits stopBits,
+    FdGuard fdGuard,
+    BaudRate baudRate, Parity parity, DataBits dataBits, StopBits stopBits,
     std::ostream *debugTo):
         debugTo_{debugTo},
-        devName_{std::move(devName)},
         baudRate_{baudRate},
         parity_{parity},
         dataBits_{dataBits},
-        stopBits_{stopBits}
+        stopBits_{stopBits},
+        fdGuard_{std::move(fdGuard)}
 {
-    ENSURE(!devName_.empty(), RuntimeError);
+    Settings settings;
+    getSettings(settings);
+    settingsBackup_ = settings;
+    modifySettings(settings, baudRate_, parity_, dataBits_, stopBits_);
+    setSettings(settings);
+    /* flush in/out buffers */
+    flush();
+    lastTimestamp_  = Clock::now();
+}
 
-    fd_ = ::open(devName_.c_str(), O_RDWR | O_NONBLOCK);
+SerialPort::SerialPort(
+    std::string device,
+    BaudRate baudRate, Parity parity, DataBits dataBits, StopBits stopBits,
+    std::ostream *debugTo):
+    SerialPort
+    {
+        FdGuard{std::move(device), O_RDWR | O_NONBLOCK},
+        baudRate, parity, dataBits, stopBits,
+        debugTo
+    }
+{}
 
-    ENSURE(-1 != fd_, CRuntimeError);
+SerialPort::~SerialPort()
+{
+    TRACE(
+        TraceLevel::Debug,
+        "rxCntr ", rxCntr_, ", txCntr ", txCntr_,
+        ", rxTotalCntr ", rxTotalCntr_, ", txTotalCntr ", txTotalCntr_);
 
-    struct termios settings;
+    if(fdGuard_)
+    {
+        flush();
+        (void)::tcsetattr(fdGuard_.fd(), TCSANOW, &settingsBackup_);
+    }
+}
 
+void SerialPort::getSettings(Settings &settings, int fd)
+{
     ::memset(&settings, 0, sizeof(struct termios));
+    ENSURE(-1 != ::tcgetattr(fd, &settings), CRuntimeError);
+}
 
-    // get current settings
-    ENSURE(-1 != ::tcgetattr(fd_, &settings), CRuntimeError);
-    // backup settings
-    settings_ = std::make_unique<struct termios>(settings);
+void SerialPort::modifySettings(
+    Settings &settings,
+    BaudRate baudRate, Parity parity, DataBits dataBits, StopBits stopBits)
+{
     // BaudRate
     {
-        cfsetispeed(&settings, static_cast<::speed_t>(baudRate_));
-        cfsetospeed(&settings, static_cast<::speed_t>(baudRate_));
+        cfsetispeed(&settings, static_cast<::speed_t>(baudRate));
+        cfsetospeed(&settings, static_cast<::speed_t>(baudRate));
     }
     // Parity
     {
-        if(Parity::None == parity_)
+        if(Parity::None == parity)
         {
             settings.c_cflag &= ~PARENB;
             settings.c_iflag &= ~INPCK;
@@ -122,22 +150,22 @@ SerialPort::SerialPort(
             //settings.c_iflag &= ~IGNPAR;
             settings.c_cflag |= PARENB;
 
-            if(Parity::Odd == parity_) settings.c_cflag |= PARODD;
-            else if(Parity::Even == parity_) settings.c_cflag &= ~PARODD;
+            if(Parity::Odd == parity) settings.c_cflag |= PARODD;
+            else if(Parity::Even == parity) settings.c_cflag &= ~PARODD;
         }
     }
     // DataBits
     {
         settings.c_cflag &= ~CSIZE;
-        if(DataBits::Five == dataBits_) settings.c_cflag |= CS5;
-        else if(DataBits::Six == dataBits_) settings.c_cflag |= CS6;
-        else if(DataBits::Seven == dataBits_) settings.c_cflag |= CS7;
-        else if(DataBits::Eight == dataBits_) settings.c_cflag |= CS8;
+        if(DataBits::Five == dataBits) settings.c_cflag |= CS5;
+        else if(DataBits::Six == dataBits) settings.c_cflag |= CS6;
+        else if(DataBits::Seven == dataBits) settings.c_cflag |= CS7;
+        else if(DataBits::Eight == dataBits) settings.c_cflag |= CS8;
     }
     // StopBits
     {
-        if(StopBits::One == stopBits_) settings.c_cflag &= ~CSTOPB;
-        else if(StopBits::Two == stopBits_) settings.c_cflag |= CSTOPB;
+        if(StopBits::One == stopBits) settings.c_cflag &= ~CSTOPB;
+        else if(StopBits::Two == stopBits) settings.c_cflag |= CSTOPB;
     }
     // Additional settings (similar to cfmakeraw())
     {
@@ -164,36 +192,26 @@ SerialPort::SerialPort(
         settings.c_cc[VTIME] = 0;
         settings.c_cc[VMIN] = 0;
     }
-
-    ENSURE(-1 != ::tcsetattr(fd_, TCSANOW, &settings), CRuntimeError);
-    /* flush in/out buffers */
-    ENSURE(-1 != ::tcflush(fd_, TCIOFLUSH), CRuntimeError);
-    lastTimestamp_  = Clock::now();
 }
 
-SerialPort::~SerialPort()
+void SerialPort::setSettings(int fd, const Settings &settings)
 {
-    TRACE(
-        TraceLevel::Debug,
-        "rxCntr ", rxCntr_, ", txCntr ", txCntr_,
-        ", rxTotalCntr ", rxTotalCntr_, ", txTotalCntr ", txTotalCntr_);
-
-    if(-1 != fd_ && settings_)
-    {
-        (void)::tcflush(fd_, TCIOFLUSH);
-        (void)::tcsetattr(fd_, TCSANOW, settings_.get());
-        (void)::close(fd_);
-    }
+    ENSURE(-1 != ::tcsetattr(fd, TCSANOW, &settings), CRuntimeError);
+    /* tcsetattr() returns success if any of the requested changes could be
+     * successfully carried out - validate that all requested settings are applied */
+    Settings current;
+    getSettings(current, fd);
+    ENSURE(0 == memcmp(&settings, &current, sizeof(Settings)), RuntimeError);
 }
 
 uint8_t *SerialPort::read(uint8_t *begin, const uint8_t *const end, mSecs timeout)
 {
-    ENSURE(-1 != fd_, RuntimeError);
+    ASSERT(fdGuard_);
     ENSURE(mSecs{0} <= timeout, RuntimeError);
 
     struct pollfd events =
     {
-        fd_,
+        fdGuard_.fd(),
         short(POLLIN) /* events */,
         short(0) /* revents */
     };
@@ -219,7 +237,7 @@ uint8_t *SerialPort::read(uint8_t *begin, const uint8_t *const end, mSecs timeou
         }
 
         {
-            auto r = ::read(fd_, curr, end - curr);
+            auto r = ::read(fdGuard_.fd(), curr, end - curr);
 
             validateSysCallResult(r);
             ENSURE(0 != r, RuntimeError);
@@ -237,12 +255,12 @@ uint8_t *SerialPort::read(uint8_t *begin, const uint8_t *const end, mSecs timeou
 
 const uint8_t *SerialPort::write(const uint8_t *begin, const uint8_t *const end, mSecs timeout)
 {
-    ENSURE(-1 != fd_, RuntimeError);
+    ASSERT(fdGuard_);
     ENSURE(mSecs{0} <= timeout, RuntimeError);
 
     struct pollfd events =
     {
-        fd_,
+        fdGuard_.fd(),
         short(POLLOUT) /* events */,
         short(0) /* revents */
     };
@@ -268,7 +286,7 @@ const uint8_t *SerialPort::write(const uint8_t *begin, const uint8_t *const end,
         }
 
         {
-            auto r = ::write(fd_, curr, end - curr);
+            auto r = ::write(fdGuard_.fd(), curr, end - curr);
 
             validateSysCallResult(r);
             ENSURE(0 != r, RuntimeError);
@@ -284,33 +302,33 @@ const uint8_t *SerialPort::write(const uint8_t *begin, const uint8_t *const end,
     return curr;
 }
 
-void SerialPort::drain()
+void SerialPort::drain(int fd)
 {
-    ENSURE(-1 != fd_, RuntimeError);
-    ENSURE(-1 != ::tcdrain(fd_), CRuntimeError);
+    ENSURE(-1 != fd, RuntimeError);
+    ENSURE(-1 != ::tcdrain(fd), CRuntimeError);
 }
 
-void SerialPort::flush()
+void SerialPort::flush(int fd)
 {
-    ENSURE(-1 != fd_, RuntimeError);
-    ENSURE(-1 != ::tcflush(fd_, TCIOFLUSH), CRuntimeError);
+    ENSURE(-1 != fd, RuntimeError);
+    ENSURE(-1 != ::tcflush(fd, TCIOFLUSH), CRuntimeError);
 }
 
-void SerialPort::rxFlush()
+void SerialPort::rxFlush(int fd)
 {
-    ENSURE(-1 != fd_, RuntimeError);
-    ENSURE(-1 != ::tcflush(fd_, TCIFLUSH), CRuntimeError);
+    ENSURE(-1 != fd, RuntimeError);
+    ENSURE(-1 != ::tcflush(fd, TCIFLUSH), CRuntimeError);
 }
 
-void SerialPort::txFlush()
+void SerialPort::txFlush(int fd)
 {
-    ENSURE(-1 != fd_, RuntimeError);
-    ENSURE(-1 != ::tcflush(fd_, TCOFLUSH), CRuntimeError);
+    ENSURE(-1 != fd, RuntimeError);
+    ENSURE(-1 != ::tcflush(fd, TCOFLUSH), CRuntimeError);
 }
 
 SerialPort::BaudRate toBaudRate(const std::string &rate)
 {
-    using BaudRate = Modbus::SerialPort::BaudRate;
+    using BaudRate = SerialPort::BaudRate;
 
     if("1200" == rate) return BaudRate::BR_1200;
     else if("2400" == rate) return BaudRate::BR_2400;
@@ -328,7 +346,7 @@ SerialPort::BaudRate toBaudRate(const std::string &rate)
 
 SerialPort::Parity toParity(const std::string &parity)
 {
-    using Parity = Modbus::SerialPort::Parity;
+    using Parity = SerialPort::Parity;
 
     if("N" == parity) return Parity::None;
     else if("O" == parity) return Parity::Odd;
@@ -339,4 +357,32 @@ SerialPort::Parity toParity(const std::string &parity)
     return Parity::Even;
 }
 
-} /* Modbus */
+
+PseudoPair createPseudoPair(
+    SerialPort::BaudRate baudRate, SerialPort::Parity parity,
+    SerialPort::DataBits dataBits, SerialPort::StopBits stopBits,
+    std::ostream *masterDbgTo, std::ostream *slaveDbgTo,
+    const char *multiplexor)
+{
+    assert(multiplexor);
+    const int flags = O_RDWR | O_NONBLOCK;
+
+    // master
+    FdGuard mfd{multiplexor, flags};
+
+    ENSURE(0 == ::grantpt(mfd.fd()), CRuntimeError);
+    ENSURE(0 == ::unlockpt(mfd.fd()), CRuntimeError);
+
+    // slave device path
+    char spath[PATH_MAX];
+    ENSURE(0 == ::ptsname_r(mfd.fd(), spath, sizeof(spath)), CRuntimeError);
+
+    // slave
+    FdGuard sfd{spath, flags};
+
+    return
+    {
+        SerialPort{std::move(mfd), baudRate, parity, dataBits, stopBits, masterDbgTo},
+        SerialPort{std::move(sfd), baudRate, parity, dataBits, stopBits, slaveDbgTo}
+    };
+}

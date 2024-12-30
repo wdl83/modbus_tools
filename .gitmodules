@@ -1,3 +1,6 @@
 [submodule "ensure"]
 	path = ensure
 	url = https://github.com/wdl83/ensure
+[submodule "utest"]
+	path = utest
+	url = https://github.com/wdl83/utest.h

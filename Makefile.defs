@@ -11,16 +11,16 @@ endif
 CXXFLAGS = \
 	-DENABLE_TRACE \
 	-I ensure \
-	-Os \
+	-O2 \
 	-Wall \
 	-Wextra \
 	-Wno-parentheses \
 	-Wshadow \
 	-Wunreachable-code \
 	-g \
-	-std=c++14
+	-std=c++17
 
-ifndef RELEASE
+ifdef DEBUG
 	CXXFLAGS +=  \
 		-fsanitize=address
 endif
@@ -28,7 +28,7 @@ endif
 LDFLAGS = \
 	-lstdc++
 
-ifndef RELEASE
+ifdef DEBUG
 	LDFLAGS += \
 		-fsanitize=address
 endif

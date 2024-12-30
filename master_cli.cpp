@@ -77,11 +77,11 @@ int main(int argc, char *argv[])
 
         Modbus::RTU::Master master
         {
-            device.c_str(),
-            Modbus::toBaudRate(rate),
-            Modbus::toParity(parity),
-            Modbus::SerialPort::DataBits::Eight,
-            Modbus::SerialPort::StopBits::One
+            device,
+            toBaudRate(rate),
+            toParity(parity),
+            SerialPort::DataBits::Eight,
+            SerialPort::StopBits::One
         };
 
         for(const auto &i : input)

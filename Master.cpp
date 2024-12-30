@@ -202,7 +202,7 @@ Master::DebugScope::~DebugScope()
         auto j = std::find(i, end, '\n');
 
         trace(
-            std::uncaught_exception()
+            std::uncaught_exceptions()
             ? TraceLevel::Error
             : TraceLevel::Debug,
             std::string{i, j});

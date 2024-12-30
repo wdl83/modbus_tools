@@ -4,12 +4,13 @@ export OBJ_DIR
 DST_DIR ?= ${PWD}/dst
 export DST_DIR
 
-all: \
+build: \
 	bw_test.Makefile \
 	chslv.Makefile \
 	master_cli.Makefile \
 	monitor.Makefile \
 	probe.Makefile \
+	tests/Makefile \
 	tlog_dump.Makefile
 	make -f bw_test.Makefile
 	make -f chslv.Makefile
@@ -17,14 +18,9 @@ all: \
 	make -f monitor.Makefile
 	make -f probe.Makefile
 	make -f tlog_dump.Makefile
+	make -C tests
 
-install: \
-	bw_test.Makefile \
-	chslv.Makefile \
-	master_cli.Makefile \
-	monitor.Makefile \
-	probe.Makefile \
-	tlog_dump.Makefile
+install: build
 	make -f bw_test.Makefile install
 	make -f chslv.Makefile install
 	make -f master_cli.Makefile install
@@ -32,17 +28,12 @@ install: \
 	make -f probe.Makefile install
 	make -f tlog_dump.Makefile install
 
-clean: \
-	bw_test.Makefile \
-	master_cli.Makefile \
-	monitor.Makefile \
-	probe.Makefile \
-	tlog_dump.Makefile 
-	make -f bw_test.Makefile clean
-	make -f master_cli.Makefile clean
-	make -f monitor.Makefile clean
-	make -f probe.Makefile clean
-	make -f tlog_dump.Makefile clean
+clean:
+	-make -f bw_test.Makefile clean
+	-make -f master_cli.Makefile clean
+	-make -f monitor.Makefile clean
+	-make -f probe.Makefile clean
+	-make -f tlog_dump.Makefile clean
 
 purge:
-	rm $(OBJ_DIR) -rf
+	-rm $(OBJ_DIR) -rf

@@ -1,13 +1,13 @@
 #pragma once
 
 #include <chrono>
-#include <memory>
 #include <ostream>
 #include <string>
 
 #include <termios.h>
 
-namespace Modbus {
+#include "FdGuard.h"
+
 
 struct SerialPort
 {
@@ -30,36 +30,55 @@ struct SerialPort
     using uSecs = std::chrono::microseconds;
     using mSecs = std::chrono::milliseconds;
     using Clock = std::chrono::steady_clock;
+    using Settings = struct termios;
 private:
     std::ostream *debugTo_;
-    std::string devName_;
     BaudRate baudRate_;
     Parity parity_;
     DataBits dataBits_;
     StopBits stopBits_;
-    int fd_{-1};
-    std::unique_ptr<struct termios> settings_;
+    FdGuard fdGuard_;
+    Settings settingsBackup_;
     Clock::time_point lastTimestamp_;
     uint64_t rxCntr_{0};
     uint64_t txCntr_{0};
     uint64_t rxTotalCntr_{0};
     uint64_t txTotalCntr_{0};
 public:
-    SerialPort(
-        std::string devName,
-        BaudRate,
-        Parity,
-        DataBits,
-        StopBits,
+    explicit SerialPort(
+        FdGuard,
+        BaudRate, Parity, DataBits, StopBits,
         std::ostream *);
+    explicit SerialPort(
+        std::string device,
+        BaudRate, Parity, DataBits, StopBits,
+        std::ostream *);
+
+    SerialPort(const SerialPort &) = delete;
     ~SerialPort();
+
+    SerialPort &operator=(const SerialPort &) = delete;
+
+    static void getSettings(Settings &, int fd);
+    static void modifySettings(Settings &, BaudRate, Parity, DataBits, StopBits);
+    static void setSettings(int fd, const Settings &);
+
+    void getSettings(Settings &settings) const { getSettings(settings, fdGuard_.fd()); }
+    void setSettings(const Settings &settings) { setSettings(fdGuard_.fd(), settings); }
+
     uint8_t *read(uint8_t *begin, const uint8_t *const end, mSecs timeout);
     const uint8_t *write(const uint8_t *begin, const uint8_t *const end, mSecs timeout);
+
     /* wait until data written is transmitted */
-    void drain();
-    void flush();
-    void rxFlush();
-    void txFlush();
+    static void drain(int fd);
+    static void flush(int fd);
+    static void rxFlush(int fd);
+    static void txFlush(int fd);
+
+    void drain() { drain(fdGuard_.fd()); }
+    void flush() { flush(fdGuard_.fd()); }
+    void rxFlush() { txFlush(fdGuard_.fd()); }
+    void txFlush() { txFlush(fdGuard_.fd()); }
 
     uint64_t rxCntr() const {return rxCntr_;}
     uint64_t txCntr() const {return txCntr_;}
@@ -77,4 +96,16 @@ public:
 SerialPort::BaudRate toBaudRate(const std::string &);
 SerialPort::Parity toParity(const std::string &);
 
-} /* Modbus */
+
+struct PseudoPair
+{
+    SerialPort master;
+    SerialPort slave;
+};
+
+PseudoPair createPseudoPair(
+    SerialPort::BaudRate, SerialPort::Parity,
+    SerialPort::DataBits, SerialPort::StopBits,
+    std::ostream *masterDbgTo = nullptr,
+    std::ostream *slaveDbgTo = nullptr,
+    const char *multiplexor = "/dev/ptmx");

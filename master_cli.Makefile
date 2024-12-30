@@ -3,6 +3,7 @@ include Makefile.defs
 TARGET = master_cli
 
 CXXSRCS = \
+	FdGuard.cpp \
 	Master.cpp \
 	SerialPort.cpp \
 	crc.cpp \

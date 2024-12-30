@@ -7,7 +7,7 @@ Building
 ```console
 git clone --recurse-submodules https://github.com/wdl83/modbus_tools
 cd modbus_tools
-RELEASE=1 make
+make
 ```
 Build artifacts will be placed in 'obj' dir, if you have not defined OBJ_DIR.
 
@@ -19,7 +19,7 @@ DST_DIR variable can be used to define prefix (must be absolute) path for:
 1. $DST_DIR/bin
 
 ```console
-RELEASE=1 DST_DIR=$HOME/opt make install
+DST_DIR=$HOME/opt make install
 ```
 
 JSON Format
