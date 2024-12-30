@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <bits/chrono.h>
 #include <cctype>
 #include <chrono>
 #include <cstdint>
@@ -22,7 +23,30 @@ UTEST(SerialPort, open_and_close)
     EXPECT_TRUE(true);
 }
 
-UTEST(SerialPort, read_and_write)
+UTEST(SerialPort, write_then_read)
+{
+    auto pair =
+        createPseudoPair(
+            SerialPort::BaudRate::BR_9600, SerialPort::Parity::None,
+            SerialPort::DataBits::Eight, SerialPort::StopBits::One);
+
+    const uint8_t message[] = "hello on other side!";
+    const auto timeout = std::chrono::milliseconds{100};
+
+    {
+        const auto i = pair.master.write(std::cbegin(message), std::cend(message), timeout);
+        EXPECT_TRUE(i == std::cend(message));
+    }
+
+    {
+        uint8_t buf[255] = {};
+        const auto i = pair.slave.read(std::begin(buf), std::cend(buf), timeout);
+        EXPECT_TRUE(i - std::cbegin(buf) == sizeof(message));
+        EXPECT_TRUE(0 == memcmp(message, buf, sizeof(message)));
+    }
+}
+
+UTEST(SerialPort, async_read_and_write)
 {
     auto pair =
         createPseudoPair(
@@ -47,7 +71,7 @@ UTEST(SerialPort, read_and_write)
     EXPECT_TRUE(i == std::cend(message));
 }
 
-UTEST(SerialPort, echo)
+UTEST(SerialPort, async_echo)
 {
     using namespace std::chrono;
     const uint8_t stopMessage[] = "STOP";
@@ -109,6 +133,22 @@ UTEST(SerialPort, echo)
     }
 
     receiver.join();
+}
+
+UTEST(SerialPort, read_timeout)
+{
+    using namespace std::chrono;
+    auto pair =
+        createPseudoPair(
+            SerialPort::BaudRate::BR_9600, SerialPort::Parity::None,
+            SerialPort::DataBits::Eight, SerialPort::StopBits::One);
+
+    const auto timeout = milliseconds{20};
+    const auto start = steady_clock::now();
+    uint8_t buf[32] = {};
+    EXPECT_TRUE(std::cbegin(buf) == pair.master.read(std::begin(buf), std::cend(buf), timeout));
+    const auto elapsed = steady_clock::now() - start;
+    EXPECT_TRUE(duration_cast<milliseconds>(elapsed) >= timeout);
 }
 
 UTEST_MAIN();
