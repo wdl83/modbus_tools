@@ -10,8 +10,10 @@
 #include <random>
 #include <thread>
 
-#include "utest.h"
 #include "PseudoSerial.h"
+#include "Trace.h"
+#include "utest.h"
+#include "util.h"
 
 
 UTEST(SerialPort, open_and_close)
@@ -149,6 +151,41 @@ UTEST(SerialPort, read_timeout)
     EXPECT_TRUE(std::cbegin(buf) == pair.master.read(std::begin(buf), std::cend(buf), timeout));
     const auto elapsed = steady_clock::now() - start;
     EXPECT_TRUE(duration_cast<milliseconds>(elapsed) >= timeout);
+}
+
+namespace {
+
+std::atomic_int usr1Cntr = 0;
+
+void handleUSR1(int signalNo)
+{
+    if(SIGUSR1 == signalNo) ++usr1Cntr;
+}
+
+} // namespace
+
+UTEST(SerialPort, read_interrupted)
+{
+    ScopedSignalHandler handler{SIGUSR1, handleUSR1};
+
+    auto pair =
+        createPseudoPair(
+            SerialPort::BaudRate::BR_9600, SerialPort::Parity::None,
+            SerialPort::DataBits::Eight, SerialPort::StopBits::One);
+
+    auto receiver =
+        std::thread(
+            [&pair]()
+            {
+                const auto timeout = std::chrono::milliseconds{1000};
+                uint8_t buf[255] = {};
+                (void)pair.slave.read(std::begin(buf), std::cend(buf), timeout);
+            });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    ::pthread_kill(receiver.native_handle(), SIGUSR1);
+    receiver.join();
+    EXPECT_TRUE(1 == usr1Cntr);
 }
 
 UTEST_MAIN();

@@ -9,14 +9,17 @@
 
 #include "Ensure.h"
 #include "SerialPort.h"
+#include "Trace.h"
 
 
 namespace {
 
 void validateSysCallResult(int r)
 {
-    const auto valid = -1 != r || (-1 == r && EINTR == errno);
+    const auto interrupred = -1 == r && EINTR == errno;
+    const auto valid = -1 != r || interrupred;
     ENSURE(valid, CRuntimeError);
+    if(-1 == r) TRACE(TraceLevel::Trace, strerror(errno));
 }
 
 void dump(std::ostream &os, const uint8_t *begin, const uint8_t *const end)
@@ -224,26 +227,20 @@ uint8_t *SerialPort::read(uint8_t *begin, const uint8_t *const end, mSecs timeou
 
     while(curr != end && timeout >= elapsed)
     {
-        {
-            auto r = ::poll(&events, 1, (timeout - elapsed).count());
+        auto r = ::poll(&events, 1, (timeout - elapsed).count());
 
-            // ignore poll interrupted by received signal
-            validateSysCallResult(r);
-            elapsed = duration_cast<mSecs>(Clock::now() - startTimestamp);
-            /* fd is not ready for reading */
-            if(0 == r) continue;
-            if(0 == (events.revents & POLLIN)) continue;
-        }
+        validateSysCallResult(r);
+        elapsed = duration_cast<mSecs>(Clock::now() - startTimestamp);
+        if(0 == r) continue; // poll timeout
+        if(0 == (events.revents & POLLIN)) continue; // fd not ready for read
 
-        {
-            auto r = ::read(fdGuard_.fd(), curr, end - curr);
+        r = ::read(fdGuard_.fd(), curr, end - curr);
 
-            validateSysCallResult(r);
-            ENSURE(0 != r, RuntimeError);
-            std::advance(curr, r);
-            rxCntr_ += r;
-            rxTotalCntr_ += r;
-        }
+        validateSysCallResult(r);
+        ENSURE(0 != r, RuntimeError);
+        std::advance(curr, r);
+        rxCntr_ += r;
+        rxTotalCntr_ += r;
     }
 
     const auto now = Clock::now();
@@ -273,26 +270,20 @@ const uint8_t *SerialPort::write(const uint8_t *begin, const uint8_t *const end,
 
     while(curr != end && timeout >= elapsed)
     {
-        {
-            auto r = ::poll(&events, 1, (timeout - elapsed).count());
+        auto r = ::poll(&events, 1, (timeout - elapsed).count());
 
-            // ignore poll interrupted by received signal
-            validateSysCallResult(r);
-            elapsed = duration_cast<mSecs>(Clock::now() - startTimestamp);
-            /* fd is not ready for reading */
-            if(0 == r) continue;
-            if(0 == (events.revents & POLLOUT)) continue;
-        }
+        validateSysCallResult(r);
+        elapsed = duration_cast<mSecs>(Clock::now() - startTimestamp);
+        if(0 == r) continue; // poll timeout
+        if(0 == (events.revents & POLLOUT)) continue; // fd not ready for write
 
-        {
-            auto r = ::write(fdGuard_.fd(), curr, end - curr);
+        r = ::write(fdGuard_.fd(), curr, end - curr);
 
-            validateSysCallResult(r);
-            ENSURE(0 != r, RuntimeError);
-            std::advance(curr, r);
-            txCntr_ += r;
-            txTotalCntr_ += r;
-        }
+        validateSysCallResult(r);
+        ENSURE(0 != r, RuntimeError);
+        std::advance(curr, r);
+        txCntr_ += r;
+        txTotalCntr_ += r;
     }
 
     const auto now = Clock::now();

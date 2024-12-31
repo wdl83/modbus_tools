@@ -8,6 +8,7 @@ CXXSRCS = \
 	FdGuard.cpp \
 	PseudoSerial.cpp \
 	SerialPort.cpp \
-	tests/SerialPortTests.cpp
+	tests/SerialPortTests.cpp \
+	tests/util.cpp
 
 include Makefile.rules
